@@ -22,7 +22,7 @@ variable "client_id" {
 variable "client_secret" {
         }
 
-source "azure-arm" "win11_24h2_avd_hsud" {
+source "azure-arm" "win11_24h2_avd_developer" {
     subscription_id     = var.subscription_id
     tenant_id           = var.tenant_id
     client_id           = var.client_id
@@ -46,7 +46,7 @@ source "azure-arm" "win11_24h2_avd_hsud" {
         subscription        = var.subscription_id
         resource_group      = "rgazweuavdprodacg01"
         gallery_name        = "acgazweuavdprod02"
-        image_name          = "azure_windows_11_baseos_avd_hsud_24h2"
+        image_name          = "azure_windows_11_baseos_avd_developer_24h2"
         image_version       = "19.11.2025"
         replication_regions = ["westeurope","eastasia","eastus2"]
     }
@@ -60,7 +60,7 @@ source "azure-arm" "win11_24h2_avd_hsud" {
 
 build {
     name    = "AVD_Win11_24H2_Image_Build"
-    sources = ["source.azure-arm.win11_24h2_avd_hsud"]
+    sources = ["source.azure-arm.win11_24h2_avd_developer"]
     #timeout = "16h"
 /*
     provisioner "powershell" {
@@ -86,7 +86,21 @@ build {
     }
 */
   ##############################################
-  # 1. Install HSUD Applications
+  # 1. Enable .NET 3.5 Feature
+  ##############################################
+    provisioner "powershell" {
+        inline = [
+        "cd D:\\",
+        "Invoke-WebRequest -Uri 'https://avdweustc03.blob.core.windows.net/source/AIB_LocalInstall_DotNet3.5.ps1' -OutFile 'D:\\AIB_LocalInstall_DotNet3.5.ps1'",
+        "Start-Sleep -seconds 30",
+        "& .\\AIB_LocalInstall_DotNet3.5.ps1"
+        ]
+        timeout          = "2h"
+        valid_exit_codes = [0, 3010]
+    }
+
+  ##############################################
+  # 2. Install Updated Applications
   ##############################################
     provisioner "powershell" {
         inline = [
@@ -96,16 +110,63 @@ build {
         "New-Item -ItemType Directory -Force -Path $path",
         "}",
         "cd C:\\AVDImage",
-        "Invoke-WebRequest -Uri 'https://avdweustc03.blob.core.windows.net/source/AIB_AVD_HSUD_InstallApps.ps1' -OutFile 'C:\\AVDImage\\AIB_AVD_HSUD_InstallApps.ps1'",
+        "Invoke-WebRequest -Uri 'https://avdweustc03.blob.core.windows.net/source/AIB_Install_VisualStudio2022_CoreComponents.ps1' -OutFile 'C:\\AVDImage\\AIB_Install_VisualStudio2022_CoreComponents.ps1'",
         "Start-Sleep -seconds 30",
-        "& .\\AIB_AVD_HSUD_InstallApps.ps1"
+        "& .\\AIB_Install_VisualStudio2022_CoreComponents.ps1"
+        ]
+        timeout          = "2h"
+        valid_exit_codes = [0, 3010]
+    }
+  ##############################################
+  # 3. Reboot After Optimization
+  ##############################################
+    provisioner "powershell" {
+        inline = [
+        "Write-Output 'Rebooting after optimizations...'; Restart-Computer -Force"
+        ]
+        timeout = "30m"
+    }
+
+  ##############################################
+  # 4. Install Visual Studio Extension
+  ##############################################
+    provisioner "powershell" {
+        inline = [
+        "$path = 'C:\\AVDImage'",
+        "If(!(Test-Path $path))",
+        "{",
+        "New-Item -ItemType Directory -Force -Path $path",
+        "}",
+        "cd C:\\AVDImage",
+        "Invoke-WebRequest -Uri 'https://avdweustc03.blob.core.windows.net/source/AIB_Install_VisualStudio2022_Extensions.ps1' -OutFile 'C:\\AVDImage\\AIB_Install_VisualStudio2022_Extensions.ps1'",
+        "Start-Sleep -seconds 30",
+        "& .\\AIB_Install_VisualStudio2022_Extensions.ps1"
         ]
         timeout          = "2h"
         valid_exit_codes = [0, 3010]
     }
 
   ##############################################
-  # 2. Multimedia Redirection Setup
+  # 5. Install Developer Applications
+  ##############################################
+    provisioner "powershell" {
+        inline = [
+        "$path = 'C:\\AVDImage'",
+        "If(!(Test-Path $path))",
+        "{",
+        "New-Item -ItemType Directory -Force -Path $path",
+        "}",
+        "cd C:\\AVDImage",
+        "Invoke-WebRequest -Uri 'https://avdweustc03.blob.core.windows.net/source/AIB_Install_DeveloperTools.ps1' -OutFile 'C:\\AVDImage\\AIB_Install_DeveloperTools.ps1'",
+        "Start-Sleep -seconds 30",
+        "& .\\AIB_Install_DeveloperTools.ps1"
+        ]
+        timeout          = "2h"
+        valid_exit_codes = [0, 3010]
+    }
+
+  ##############################################
+  # 6. Multimedia Redirection Setup
   ##############################################
     provisioner "powershell" {
         inline = [
@@ -123,7 +184,7 @@ build {
         valid_exit_codes = [0, 3010]
     }
   ##############################################
-  # 3. Install New Teams Add-in
+  # 7. Install New Teams Add-in
   ##############################################
     provisioner "powershell" {
         inline = [
@@ -142,7 +203,7 @@ build {
     }
 
   ##############################################
-  # 4. Apply Custom AVD Settings
+  # 8. Apply Custom AVD Settings
   ##############################################
     provisioner "powershell" {
         inline = [
@@ -152,15 +213,15 @@ build {
         "New-Item -ItemType Directory -Force -Path $path",
         "}",
         "cd C:\\AVDImage",
-        "Invoke-WebRequest -Uri 'https://avdweustc03.blob.core.windows.net/source/AIB_AVD_HSUD_CustomSettings.ps1' -OutFile 'C:\\AVDImage\\AIB_AVD_HSUD_CustomSettings.ps1'",
+        "Invoke-WebRequest -Uri 'https://avdweustc03.blob.core.windows.net/source/AIB_AVD_CustomSettings_Developer_Win11.ps1' -OutFile 'C:\\AVDImage\\AIB_AVD_CustomSettings_Developer_Win11.ps1'",
         "Start-Sleep -seconds 30",
-        "& .\\AIB_AVD_HSUD_CustomSettings.ps1"
+        "& .\\AIB_AVD_CustomSettings_Developer_Win11.ps1"
         ]
         timeout          = "1h"
         valid_exit_codes = [0, 3010]
     }
   ##############################################
-  # 5. Remove UWP Apps
+  # 8. Remove UWP Apps
   ##############################################
     provisioner "powershell" {
         inline = [
@@ -178,7 +239,7 @@ build {
         valid_exit_codes = [0, 3010]
     }
   ##############################################
-  # 6. Windows Optimization
+  # 9. Windows Optimization
   ##############################################
     provisioner "powershell" {
         inline = [
@@ -196,7 +257,7 @@ build {
         valid_exit_codes = [0, 3010]
     }
   ##############################################
-  # 7. Post-Optimization Windows Updates
+  # 10. Post-Optimization Windows Updates
   ##############################################
     provisioner "windows-update" {
         search_criteria = "IsInstalled=0"
@@ -208,7 +269,7 @@ build {
     }
 
   ##############################################
-  # 8. Reboot After Optimization
+  # 11. Reboot After Optimization
   ##############################################
     provisioner "powershell" {
         inline = [
@@ -217,7 +278,7 @@ build {
         timeout = "30m"
     }
   ##############################################
-  # 9. Disabling Scheduled Task
+  # 12. Disabling Scheduled Task
   ##############################################
     provisioner "powershell" {
         inline = [
@@ -235,7 +296,7 @@ build {
         valid_exit_codes = [0, 3010]
     }
   ##############################################
-  # 10. Disabling Unwanted Services
+  # 13. Disabling Unwanted Services
   ##############################################
     provisioner "powershell" {
         inline = [
@@ -254,7 +315,7 @@ build {
     }
 
   ##############################################
-  # 11. Disabling Windows traces
+  # 14. Disabling Windows traces
   ##############################################
     provisioner "powershell" {
         inline = [
@@ -273,7 +334,7 @@ build {
     }
 
   ##############################################
-  # 12. Lanman Paramters
+  # 15. Lanman Paramters
   ##############################################
     provisioner "powershell" {
         inline = [
@@ -291,26 +352,9 @@ build {
         valid_exit_codes = [0, 3010]
     }
 
+
   ##############################################
-  # 13. App-V Task Schedular
-  ##############################################
-    provisioner "powershell" {
-        inline = [
-        "$path = 'C:\\AVDImage'",
-        "If(!(Test-Path $path))",
-        "{",
-        "New-Item -ItemType Directory -Force -Path $path",
-        "}",
-        "cd C:\\AVDImage",
-        "Invoke-WebRequest -Uri 'https://avdweustc03.blob.core.windows.net/source/AIB_AVD_ScheduleTaskAppVCaching.ps1' -OutFile 'C:\\AVDImage\\AIB_AVD_ScheduleTaskAppVCaching.ps1'",
-        "Start-Sleep -seconds 30",
-        "& .\\AIB_AVD_ScheduleTaskAppVCaching.ps1"
-        ]
-        timeout          = "1h"
-        valid_exit_codes = [0, 3010]
-    }
-  ##############################################
-  # 14. Security Hardening of the Image
+  # 16. Security Hardening of the Image
   ##############################################
     provisioner "powershell" {
         inline = [
@@ -329,7 +373,7 @@ build {
     }
 
   ##############################################
-  # 15. Install Security Tools
+  # 17. Install Security Tools
   ##############################################
     provisioner "powershell" {
         inline = [
@@ -348,7 +392,7 @@ build {
     }
 
   ##############################################
-  # 16. Cleanup Image Build Artifacts
+  # 18. Cleanup Image Build Artifacts
   ##############################################
     provisioner "powershell" {
         inline = [
@@ -385,7 +429,7 @@ build {
         valid_exit_codes = [0, 3010]
     }
   ##############################################
-  # 17. Run Admin SysPrep
+  # 19. Run Admin SysPrep
   ##############################################
     provisioner "powershell" {
         inline = [
