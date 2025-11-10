@@ -371,6 +371,15 @@ build {
         timeout          = "1h"
         valid_exit_codes = [0, 3010]
     }
+  ##############################################
+  # 11. Reboot After Optimization
+  ##############################################
+    provisioner "powershell" {
+        inline = [
+        "Write-Output 'Rebooting after optimizations...'; Restart-Computer -Force"
+        ]
+        timeout = "30m"
+    }
 
   ##############################################
   # 17. Install Security Tools
