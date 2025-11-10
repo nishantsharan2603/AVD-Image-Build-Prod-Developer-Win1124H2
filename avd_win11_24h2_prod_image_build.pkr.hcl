@@ -437,6 +437,7 @@ build {
         timeout          = "2h"
         valid_exit_codes = [0, 3010]
     }
+/*
   ##############################################
   # 19. Run Admin SysPrep
   ##############################################
@@ -451,4 +452,29 @@ build {
         timeout          = "2h"
         valid_exit_codes = [0, 3010]
     }
+*/
+  ##############################################
+    # 19. Run Admin SysPrep (Final Step)
+  ##############################################
+  provisioner "powershell" {
+      inline = [
+          "Write-Host '=== Starting Sysprep process ==='",
+          "while ((Get-Service RdAgent).Status -ne 'Running') { Start-Sleep -s 5 }",
+          "while ((Get-Service WindowsAzureGuestAgent).Status -ne 'Running') { Start-Sleep -s 5 }",
+
+          # Cleanup any pending updates or DISM sessions
+          "dism.exe /Online /Cleanup-Image /StartComponentCleanup /Quiet /NoRestart",
+          "Get-Process | Where-Object {$_.Name -match 'dism|tiworker'} | Stop-Process -Force -ErrorAction SilentlyContinue",
+
+          # Run Sysprep and shut down afterward
+          "& $env:SystemRoot\\System32\\Sysprep\\Sysprep.exe /oobe /generalize /quiet /shutdown /mode:vm",
+
+          # Wait a bit to ensure proper state
+          "Start-Sleep -Seconds 30",
+          "Write-Host 'Sysprep executed with /shutdown; waiting for VM to power off...'"
+      ]
+      timeout          = "2h"
+      valid_exit_codes = [0, 3010]
+  }
+
 }
